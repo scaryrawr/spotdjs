@@ -2,6 +2,10 @@
 
 This is an MPRIS Player wrapper around the Spotify Web APIs.
 
+It has very limitted functionality since it's only goal is to integrate with MPRIS.
+
+For more advance actions, I'd recommend checking out [spotify-tui](https://github.com/Rigellute/spotify-tui).
+
 ![GNOME Demo](./demo.gif)
 
 Designed mostly to be used with [librespot](https://github.com/librespot-org/librespot). To have integration with
