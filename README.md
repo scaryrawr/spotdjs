@@ -38,3 +38,6 @@ When running librespot, configure it to call the callback script:
 librespot --onevent "~/GitHub/spotdjs/librespothandler.sh" # other options...
 ```
 
+### First run
+
+On the first run, it won't work since we haven't actually authenticated yet, but will output a link to authenticate with Spotify. Click that link and sign in to authorize spotdjs to be able to read playback state, modify playback sate, and read currently playing.
