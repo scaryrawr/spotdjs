@@ -141,10 +141,11 @@ app.put("/track/:trackId", function (req, res) {
       updateMetadata(trackResponse.body);
       switch (req.query.event) {
         case "start":
+        case "change":
         case "playing":
           player.playbackStatus = "Playing";
           break;
-        case "pause":
+        case "paused":
         case "stop":
           player.playbackStatus = "Paused";
           break;
