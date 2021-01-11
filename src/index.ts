@@ -5,6 +5,7 @@ import * as express from "express";
 import Player = require("mpris-service");
 import { Config } from "./Config";
 import { ImageCache } from "./ImageCache";
+import { exit } from "process";
 const app = express();
 const player = Player({
   name: "spotdjs",
@@ -15,9 +16,7 @@ const player = Player({
 });
 
 const imgCache = new ImageCache();
-const config = new Config();
-const spotify = new SpotifyWebApi(config.config);
-
+const configuration = new Config();
 let expirationEpoch: number | undefined;
 
 function updateMetadata(data: SpotifyApi.TrackObjectFull) {
@@ -51,65 +50,94 @@ function updateMetadata(data: SpotifyApi.TrackObjectFull) {
   player.seeked(0);
 }
 
-if (config.cache) {
-  spotify.setRefreshToken(config.cache.refreshToken);
-  spotify.authorizationCodeGrant(config.cache.authCode).then(
-    function (data) {
-      spotify.setAccessToken(data.body.access_token);
-      if (config.cache?.authCode) {
-        spotify.setRefreshToken(data.body.refresh_token);
-        config.storeAuth({
-          authCode: config.cache.authCode,
-          refreshToken: data.body.refresh_token,
-        });
-      }
+let spotify: SpotifyWebApi | undefined;
 
-      expirationEpoch = new Date().getTime() / 1000 + data.body.expires_in;
-      spotify.getMyCurrentPlaybackState().then(function (state) {
-        player.playbackStatus = state.body.is_playing ? "Playing" : "Paused";
-        if (state.body.item) {
-          updateMetadata(state.body.item);
-        }
-      });
+configuration
+  .config()
+  .then(
+    function (credentials) {
+      return new SpotifyWebApi(credentials);
     },
-    function () {
-      spotify.refreshAccessToken().then(function (data) {
-        spotify.setAccessToken(data.body.access_token);
-        expirationEpoch = new Date().getTime() / 1000 + data.body.expires_in;
-        spotify.getMyCurrentPlaybackState().then(function (state) {
-          player.playbackStatus = state.body.is_playing ? "Playing" : "Paused";
-          if (state.body.item) {
-            updateMetadata(state.body.item);
-          }
-        });
-      }, console.log);
+    function (err) {
+      console.log(err);
+      exit(-1);
     }
-  );
-} else {
-  console.log(
-    spotify.createAuthorizeURL(
-      [
-        "user-read-playback-state",
-        "user-modify-playback-state",
-        "user-read-currently-playing",
-      ],
-      "tacos"
-    )
-  );
-}
+  )
+  .then(function (spt) {
+    spotify = spt;
+    configuration.cache().then(function (cache) {
+      if (cache) {
+        spt.setRefreshToken(cache.refreshToken);
+        spt.authorizationCodeGrant(cache.authCode).then(
+          function (data) {
+            spt.setAccessToken(data.body.access_token);
+            if (cache.authCode) {
+              spt.setRefreshToken(data.body.refresh_token);
+              configuration.storeAuth({
+                authCode: cache.authCode,
+                refreshToken: data.body.refresh_token,
+              });
+            }
+
+            expirationEpoch =
+              new Date().getTime() / 1000 + data.body.expires_in;
+            spt.getMyCurrentPlaybackState().then(function (state) {
+              player.playbackStatus = state.body.is_playing
+                ? "Playing"
+                : "Paused";
+              if (state.body.item) {
+                updateMetadata(state.body.item);
+              }
+            });
+          },
+          function () {
+            spt.refreshAccessToken().then(function (data) {
+              spt.setAccessToken(data.body.access_token);
+              expirationEpoch =
+                new Date().getTime() / 1000 + data.body.expires_in;
+              spt.getMyCurrentPlaybackState().then(function (state) {
+                player.playbackStatus = state.body.is_playing
+                  ? "Playing"
+                  : "Paused";
+                if (state.body.item) {
+                  updateMetadata(state.body.item);
+                }
+              });
+            }, console.log);
+          }
+        );
+      } else {
+        console.log(
+          spt.createAuthorizeURL(
+            [
+              "user-read-playback-state",
+              "user-modify-playback-state",
+              "user-read-currently-playing",
+            ],
+            "tacos"
+          )
+        );
+      }
+    });
+  });
 
 app.get("/auth/spotify/callback", function (req, res) {
   const authCode = req.query.code;
-  if (typeof authCode !== "string") {
+  if (typeof authCode !== "string" || !spotify) {
     res.sendStatus(500);
     return;
   }
 
   spotify.authorizationCodeGrant(authCode).then(
     function (data) {
+      if (!spotify) {
+        res.sendStatus(500);
+        return;
+      }
+
       spotify.setAccessToken(data.body.access_token);
       spotify.setRefreshToken(data.body.refresh_token);
-      config.storeAuth({
+      configuration.storeAuth({
         authCode,
         refreshToken: data.body.refresh_token,
       });
@@ -136,6 +164,11 @@ player.getPosition = function () {
 };
 
 app.put("/track/:trackId", function (req, res) {
+  if (!spotify) {
+    res.sendStatus(500);
+    return;
+  }
+
   spotify.getTrack(req.params.trackId).then(
     function (trackResponse) {
       updateMetadata(trackResponse.body);
@@ -162,9 +195,18 @@ app.put("/track/:trackId", function (req, res) {
 });
 
 setInterval(function () {
-  if (expirationEpoch && expirationEpoch - new Date().getTime() / 1000 < 600) {
+  if (
+    expirationEpoch &&
+    expirationEpoch - new Date().getTime() / 1000 < 600 &&
+    spotify
+  ) {
     spotify.refreshAccessToken().then(
       function (data) {
+        if (!spotify) {
+          console.log("Invalid spotify instance");
+          return;
+        }
+
         spotify.setAccessToken(data.body.access_token);
         expirationEpoch = new Date().getTime() / 1000 + data.body.expires_in;
         spotify.getMyCurrentPlaybackState().then(function (state) {
@@ -182,7 +224,7 @@ setInterval(function () {
 }, 60000);
 
 function handlePause() {
-  spotify.pause().then(
+  spotify?.pause().then(
     function () {
       player.playbackStatus = "Paused";
     },
@@ -193,7 +235,7 @@ function handlePause() {
 }
 
 function handlePlay() {
-  spotify.play().then(
+  spotify?.play().then(
     function () {
       player.playbackStatus = "Playing";
     },
@@ -208,7 +250,7 @@ player.on("pause", handlePause);
 player.on("stop", handlePause);
 
 player.on("playpause", function () {
-  spotify.getMyCurrentPlaybackState().then(function (state) {
+  spotify?.getMyCurrentPlaybackState().then(function (state) {
     if (state.body.is_playing) {
       handlePause();
     } else {
@@ -220,13 +262,15 @@ player.on("playpause", function () {
 player.on("play", handlePlay);
 
 player.on("next", function () {
-  spotify.skipToNext();
+  spotify?.skipToNext();
 });
 
 player.on("previous", function () {
-  spotify.skipToPrevious();
+  spotify?.skipToPrevious();
 });
 
-app.listen(config.config.port, function () {
-  console.log(`App is listening on port ${config.config.port}`);
+configuration.config().then(function (config) {
+  app.listen(config.port, function () {
+    console.log(`App is listening on port ${config.port}`);
+  });
 });

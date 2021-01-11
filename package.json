@@ -24,6 +24,7 @@
   "homepage": "https://github.com/scaryrawr/spotdjs#readme",
   "dependencies": {
     "express": "^4.17.1",
+    "keytar": "^7.3.0",
     "mpris-service": "^2.1.0",
     "node-fetch": "^2.6.1",
     "spotify-web-api-node": "^5.0.0",

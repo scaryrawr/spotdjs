@@ -25,9 +25,10 @@ npm link
 
 1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard/applications) and create a new app.
 2. Add the desired callback uri in the app (with the desired port)
-3. Copy the Client ID and Client Secret into the spotdjs.conf
-4. Set up the port number and redirect url
-5. Copy the `spotdjs.conf` to `~/.config/spotdjs/spotdjs.conf`
+3. Copy the Client ID into spotdjs.conf
+4. Store the Client secret `secret-tool store --label='custom-label' service spotdjs account CLIENT_ID`
+5. Set up the port number and redirect url
+6. Copy the `spotdjs.conf` to `~/.config/spotdjs/spotdjs.conf`
 
 ### Set librespot callback
 
