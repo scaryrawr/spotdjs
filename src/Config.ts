@@ -1,19 +1,20 @@
-import fs = require("fs");
-import path = require("path");
+import * as fs from "fs";
+import * as path from "path";
+import { getPassword, setPassword } from "keytar";
 
 if (!process.env.HOME) {
   throw new Error("$HOME not set");
 }
 
-const CACHE_DIR = path.join(process.env.HOME, ".cache", "spotdjs");
+const SERVICE_NAME = "spotdjs";
+const AUTH_TOKEN = "auth_token";
+const REFRESH_TOKEN = "refresh_token";
 const CONFIG_DIR = path.join(process.env.HOME, ".config", "spotdjs");
-
-const CACHE_FILE = path.join(CACHE_DIR, "spotdjs.conf");
 const CONFIG_FILE = path.join(CONFIG_DIR, "spotdjs.conf");
 
 export type Credentials = {
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
   redirectUri: string;
   port: number;
 };
@@ -24,23 +25,46 @@ export type CachedCredentials = {
 };
 
 export class Config {
-  config: Credentials;
-  cache?: CachedCredentials;
+  private credentials: Credentials;
+  private cachedCredentials?: CachedCredentials;
 
   constructor() {
-    this.config = JSON.parse(fs.readFileSync(CONFIG_FILE).toString());
-    try {
-      this.cache = JSON.parse(fs.readFileSync(CACHE_FILE).toString());
-    } catch {}
+    this.credentials = JSON.parse(fs.readFileSync(CONFIG_FILE).toString());
   }
 
-  storeAuth(requiredAuth: CachedCredentials) {
-    this.cache = requiredAuth;
-
-    if (!fs.existsSync(CACHE_DIR)) {
-      fs.mkdirSync(CACHE_DIR);
+  async cache(): Promise<CachedCredentials | undefined> {
+    if (!this.cachedCredentials) {
+      const authCode = await getPassword(SERVICE_NAME, AUTH_TOKEN);
+      const refreshToken = await getPassword(SERVICE_NAME, REFRESH_TOKEN);
+      if (authCode && refreshToken) {
+        this.cachedCredentials = {
+          authCode,
+          refreshToken,
+        };
+      }
     }
 
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(this.cache));
+    return this.cachedCredentials;
+  }
+
+  async config(): Promise<Credentials> {
+    if (!this.credentials.clientSecret) {
+      let password = await getPassword(SERVICE_NAME, this.credentials.clientId);
+      if (!password) {
+        throw new Error(
+          `Please store the password using secret-tool: secret-tool store --label='spotdjs/${this.credentials.clientId}' service spotdjs account ${this.credentials.clientId}`
+        );
+      }
+
+      this.credentials.clientSecret = password;
+    }
+
+    return this.credentials;
+  }
+
+  async storeAuth(requiredAuth: CachedCredentials): Promise<void> {
+    this.cachedCredentials = requiredAuth;
+    await setPassword(SERVICE_NAME, AUTH_TOKEN, requiredAuth.authCode);
+    await setPassword(SERVICE_NAME, REFRESH_TOKEN, requiredAuth.refreshToken);
   }
 }
