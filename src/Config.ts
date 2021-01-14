@@ -1,16 +1,15 @@
-import * as fs from "fs";
-import * as path from "path";
-import { getPassword, setPassword } from "keytar";
+import * as fs from 'fs';
+import * as path from 'path';
+import { getPassword, setPassword } from 'keytar';
 
 if (!process.env.HOME) {
-  throw new Error("$HOME not set");
+  throw new Error('$HOME not set');
 }
 
-const SERVICE_NAME = "spotdjs";
-const AUTH_TOKEN = "auth_token";
-const REFRESH_TOKEN = "refresh_token";
-const CONFIG_DIR = path.join(process.env.HOME, ".config", "spotdjs");
-const CONFIG_FILE = path.join(CONFIG_DIR, "spotdjs.conf");
+const SERVICE_NAME = 'spotdjs';
+const REFRESH_TOKEN = 'refresh_token';
+const CONFIG_DIR = path.join(process.env.HOME, '.config', 'spotdjs');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'spotdjs.conf');
 
 export type Credentials = {
   clientId: string;
@@ -20,7 +19,6 @@ export type Credentials = {
 };
 
 export type CachedCredentials = {
-  authCode: string;
   refreshToken: string;
 };
 
@@ -34,11 +32,9 @@ export class Config {
 
   async cache(): Promise<CachedCredentials | undefined> {
     if (!this.cachedCredentials) {
-      const authCode = await getPassword(SERVICE_NAME, AUTH_TOKEN);
       const refreshToken = await getPassword(SERVICE_NAME, REFRESH_TOKEN);
-      if (authCode && refreshToken) {
+      if (refreshToken) {
         this.cachedCredentials = {
-          authCode,
           refreshToken,
         };
       }
@@ -64,7 +60,6 @@ export class Config {
 
   async storeAuth(requiredAuth: CachedCredentials): Promise<void> {
     this.cachedCredentials = requiredAuth;
-    await setPassword(SERVICE_NAME, AUTH_TOKEN, requiredAuth.authCode);
     await setPassword(SERVICE_NAME, REFRESH_TOKEN, requiredAuth.refreshToken);
   }
 }
