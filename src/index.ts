@@ -6,7 +6,9 @@ import Player = require('mpris-service');
 import { Config } from './Config';
 import { ImageCache } from './ImageCache';
 import { exit } from 'process';
+
 const app = express();
+
 const player = Player({
   name: 'spotdjs',
   identity: 'Spotify MPRIS controller',
@@ -89,6 +91,7 @@ app.get('/auth/spotify/callback', async (req, res) => {
     const tokenResponse = await spotify.authorizationCodeGrant(authCode);
     spotify.setAccessToken(tokenResponse.body.access_token);
     spotify.setRefreshToken(tokenResponse.body.refresh_token);
+    await configuration.storeAuth({ refreshToken: tokenResponse.body.refresh_token });
     expirationEpoch = new Date().getTime() / 1000 + tokenResponse.body.expires_in;
     const state = await spotify.getMyCurrentPlaybackState();
     player.playbackStatus = state.body.is_playing ? 'Playing' : 'Paused';
