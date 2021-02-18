@@ -6,6 +6,7 @@ import Player = require('mpris-service');
 import { Config } from './Config';
 import { ImageCache } from './ImageCache';
 import { exit } from 'process';
+import * as os from 'os';
 
 const app = express();
 
@@ -19,6 +20,7 @@ const player = Player({
 
 const imgCache = new ImageCache();
 const configuration = new Config();
+let last_device: string | undefined | null;
 
 async function updateMetadata(data: SpotifyApi.TrackObjectFull) {
   if (data.album.images.length > 0) {
@@ -62,6 +64,7 @@ let expirationEpoch: number | undefined;
     expirationEpoch = new Date().getTime() / 1000 + tokenResponse.body.expires_in;
 
     const state = await spotify.getMyCurrentPlaybackState();
+    last_device = state.body.device?.id;
     player.playbackStatus = state.body.is_playing ? 'Playing' : 'Paused';
     const track = state.body.item;
     if (track) {
@@ -171,7 +174,25 @@ async function handlePlay() {
   }
 
   try {
-    await spotify.play();
+    try {
+      await spotify.play();
+    } catch (err) {
+      const devices = (await spotify.getMyDevices()).body.devices;
+      const hostname = os.hostname();
+      const targetId =
+        last_device && last_device in devices.map(dev => dev.id)
+          ? last_device
+          : devices.filter(dev => dev.name === hostname).map(dev => dev.id)[0];
+      if (!targetId) {
+        throw err;
+      }
+
+      console.log(targetId);
+      await spotify.transferMyPlayback([targetId], {
+        play: true,
+      });
+    }
+
     player.playbackStatus = 'Playing';
   } catch (err) {
     console.log('failed to play: ', err.message);
@@ -188,6 +209,7 @@ player.on('playpause', async () => {
   }
 
   const state = await spotify.getMyCurrentPlaybackState();
+  last_device = state.body.device?.id;
   if (state.body.is_playing) {
     await handlePause();
   } else {
