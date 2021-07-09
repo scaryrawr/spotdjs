@@ -144,7 +144,11 @@ app.put('/track/:trackId', async (req, res) => {
 });
 
 setInterval(async () => {
-  if (expirationEpoch && expirationEpoch - new Date().getTime() / 1000 < 600 && spotify) {
+  if (!spotify) {
+    return;
+  }
+
+  if (expirationEpoch && expirationEpoch - new Date().getTime() / 1000 < 600) {
     try {
       const data = await spotify.refreshAccessToken();
       spotify.setAccessToken(data.body.access_token);
@@ -153,7 +157,13 @@ setInterval(async () => {
       console.log('Failed to refresh token: ', err.message);
     }
   }
-}, 60000);
+
+  const state = await spotify.getMyCurrentPlaybackState();
+  player.playbackStatus = state.body.is_playing ? 'Playing' : 'Paused';
+  if (state.body.item) {
+    await updateMetadata(state.body.item);
+  }
+}, 25000);
 
 async function handlePause() {
   if (!spotify) {
