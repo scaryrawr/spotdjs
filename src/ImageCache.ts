@@ -3,7 +3,6 @@ import { tmpdir } from 'os';
 import * as path from 'path';
 import { basicURLParse } from 'whatwg-url';
 import { pathToFileURL } from 'url';
-const fetch = require('node-fetch');
 
 export class ImageCache {
   private readonly cacheDir: string;
@@ -14,7 +13,7 @@ export class ImageCache {
     }
   }
 
-  async getImageLocation(imageUrl: string): Promise<string> {
+  async getImageLocation(imageUrl: string): Promise<string | undefined> {
     const uri = basicURLParse(imageUrl);
     if (!uri) {
       return imageUrl;
@@ -27,9 +26,10 @@ export class ImageCache {
     }
 
     const response = await fetch(imageUrl);
-    const buffer = await response.buffer();
-    fs.writeFileSync(imgPath, buffer, { encoding: 'binary' });
-
+    const buffer = await response.arrayBuffer();
+    fs.writeFileSync(imgPath, new Int8Array(buffer), { encoding: 'binary' });
     return pathToFileURL(imgPath).toString();
+
+    return undefined;
   }
 }

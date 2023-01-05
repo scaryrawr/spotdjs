@@ -13,6 +13,8 @@ Designed mostly to be used with [librespot](https://github.com/librespot-org/lib
 
 ## Setup
 
+Uses node v18 or higher.
+
 ### Build and link
 
 ```sh
