@@ -1,0 +1,87 @@
+#!/usr/bin/env zsh
+
+__ScriptVersion="0.1.0"
+
+#===  FUNCTION  ================================================================
+#         NAME:  usage
+#  DESCRIPTION:  Display usage information.
+#===============================================================================
+function usage ()
+{
+	echo "Usage :  $0 [options] [--]
+
+    Options:
+    -n|notify     Flag to send notification
+    -p|player     Player instance to use
+    -s|signal     Flag waybar or polybar to update display
+    -h|help       Display this message
+    -v|version    Display script version"
+
+}    # ----------  end of function usage  ----------
+
+notify=0
+signal=0
+player=''
+
+#-----------------------------------------------------------------------
+#  Handle command line arguments
+#-----------------------------------------------------------------------
+
+while getopts ":hvsnp:" opt
+do
+  case $opt in
+
+	h|help     )  usage; exit 0   ;;
+
+	v|version  )  echo "$0 -- Version $__ScriptVersion"; exit 0   ;;
+
+	n|notify   ) notify=1 ;;
+
+	p|player   ) player="$OPTARG" ;;
+
+	s|signal   ) signal=1 ;;
+
+	* )  echo -e "\n  Option does not exist : $OPTARG\n"
+		  usage; exit 1   ;;
+
+  esac    # --- end of case ---
+done
+shift $(($OPTIND-1))
+
+if [[ $signal == 1 ]]; then
+  pkill -SIGRTMIN+3 waybar
+  pkill -f playermod
+fi
+
+if timeout 1 playerctl --player="$player" status | rg -qv Playing; then
+  echo ''
+  exit 0
+fi
+
+format='{{title}}|{{artist}}|{{mpris:artUrl}}'
+trackinfo=$(timeout 2 playerctl --player="$player" metadata -f "$format")
+exitinfo=$?
+if [[ $exitinfo == 0 ]]; then
+  OLDIFS=$IFS
+  IFS='|' read -r -A infoarr <<< "$trackinfo"
+  IFS="$OLDIFS"
+  echo "${infoarr[1]} | ${infoarr[2]}"
+  if [[ $notify == 1 ]]; then
+    if [[ $"${infoarr[3]}" != "" ]]; then
+      IMG_PATH=${infoarr[3]}
+      if [[ $IMG_PATH == http* ]]; then
+	fname=`basename $IMG_PATH`
+	if [ ! -f /tmp/spotify-$fname.jpg ]; then
+	  curl "$IMG_PATH" > /tmp/spotify-$fname.jpg
+	  IMG_PATH="/tmp/spotify-$fname.jpg"
+	fi
+      fi
+
+      notify-send -i "${IMG_PATH}" "${infoarr[2]}" "${infoarr[1]}"
+    else
+      notify-send -i audio-headphones "${infoarr[2]}" "${infoarr[1]}"
+    fi
+  fi
+fi
+
+exit $exitinfo
